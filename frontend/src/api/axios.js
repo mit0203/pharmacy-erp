@@ -1,6 +1,11 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://localhost:8080';
+// =======================
+// API Base URL
+// =======================
+// For Vercel deployment, use VITE_API_BASE_URL
+// For local development, fallback to localhost
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -40,6 +45,7 @@ const processQueue = (error, token = null) => {
       prom.resolve(token);
     }
   });
+
   failedQueue = [];
 };
 
@@ -62,8 +68,8 @@ api.interceptors.response.use(
     const originalRequest = error.config;
     const status = error?.response?.status;
 
-    // Not 401 → normal error
-    if (status !== 401 || originalRequest._retry) {
+    // If no response or not 401, return normal error
+    if (!originalRequest || status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }
 
@@ -80,6 +86,7 @@ api.interceptors.response.use(
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       }).then((token) => {
+        originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${token}`;
         return api(originalRequest);
       });
@@ -99,14 +106,15 @@ api.interceptors.response.use(
         throw new Error('Invalid refresh response');
       }
 
-      // Save new tokens
+      // Save new access token
       localStorage.setItem('token', data.token);
 
+      // Save refresh token if backend returns new one
       if (data.refreshToken) {
         localStorage.setItem('refreshToken', data.refreshToken);
       }
 
-      // Update user object (important for role-based UI)
+      // Update user object for role-based UI
       const oldUser = JSON.parse(localStorage.getItem('user') || '{}');
 
       localStorage.setItem(
@@ -121,13 +129,15 @@ api.interceptors.response.use(
         })
       );
 
-      // Update headers globally
-      api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+      // Update default auth header
+      api.defaults.headers.common.Authorization = `Bearer ${data.token}`;
 
       processQueue(null, data.token);
 
       // Retry original request
+      originalRequest.headers = originalRequest.headers || {};
       originalRequest.headers.Authorization = `Bearer ${data.token}`;
+
       return api(originalRequest);
     } catch (err) {
       processQueue(err, null);
