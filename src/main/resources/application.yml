@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: pharmacy-erp
+  profiles:
+    active: dev
+
+jwt:
+  header: Authorization
+  prefix: "Bearer "
+

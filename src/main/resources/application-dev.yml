@@ -1,0 +1,36 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+  mongodb:
+    uri: mongodb://localhost:27017/pharmacy_erp_dev
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: darjimeet909@gmail.com
+    password: jgwuzhrciwnpxgys
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO
+    "[com.sygnusbiotech.pharmacyerp]": DEBUG
+    "[org.springframework.data.mongodb.core.MongoTemplate]": DEBUG
+
+jwt:
+  secret: a8c9f28d7a12b4e512c9a1d2f7e8b91a26b21c4e7d18a9942a1bc3d9b4f981e5
+  expiration: 86400000
+
+app:
+  otp:
+    expiry-minutes: 10
+  mail:
+    from: darjimeet909@gmail.com

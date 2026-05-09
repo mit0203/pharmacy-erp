@@ -1,0 +1,13 @@
+# Application Guidelines for Pharmacy ERP
+
+## 1. List API Standards
+Every module list API MUST adhere to the following standards:
+- **Pagination**: MUST support pagination (`Pageable`).
+- **Search**: MUST specify an optional `search` parameter (`String search`).
+- **Search Behavior**: MUST be case-insensitive (e.g., using `$options: 'i'` in MongoDB `@Query` `$regex`).
+- **Soft-deletes**: MUST exclude logically deleted records (`isDeleted: false` or `deleted: false`) from search and list queries.
+- **Filters**: SHOULD include relevant filters where applicable (e.g., date ranges, active statuses).
+- **Architecture Cleanliness**: 
+  - Generic endpoints = search + pagination.
+  - Specialized endpoints = business-specific logic only. Do NOT overload specialized endpoints with generic search parameters if a primary list API fits the requirement.
+- **Consistency**: Keep implementation completely consistent across all current and future ERP modules.
