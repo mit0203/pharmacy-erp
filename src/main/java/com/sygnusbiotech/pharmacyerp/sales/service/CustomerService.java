@@ -37,7 +37,7 @@ public class CustomerService {
     public Page<CustomerResponse> getAllCustomers(String search, Pageable pageable) {
         Page<Customer> customers;
 
-        if (search != null && !search.trim().isEmpty()) {
+        if (hasText(search)) {
             customers = repository.searchActiveCustomers(search.trim(), pageable);
         } else {
             customers = repository.findByDeletedFalse(pageable);
@@ -49,6 +49,7 @@ public class CustomerService {
     public CustomerResponse getCustomerById(String id) {
         Customer customer = repository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new BusinessException("Customer not found", HttpStatus.NOT_FOUND));
+
         return mapper.toResponse(customer);
     }
 
@@ -84,11 +85,13 @@ public class CustomerService {
     }
 
     private void validateUniqueFieldsForCreate(CustomerRequest request) {
-        if (repository.existsByGstNumberAndDeletedFalse(request.getGstNumber())) {
+        if (hasText(request.getGstNumber())
+                && repository.existsByGstNumberAndDeletedFalse(request.getGstNumber())) {
             throw new BusinessException("Customer with this GST Number already exists", HttpStatus.CONFLICT);
         }
 
-        if (repository.existsByPhoneAndDeletedFalse(request.getPhone())) {
+        if (hasText(request.getPhone())
+                && repository.existsByPhoneAndDeletedFalse(request.getPhone())) {
             throw new BusinessException("Customer with this phone number already exists", HttpStatus.CONFLICT);
         }
 
@@ -102,7 +105,8 @@ public class CustomerService {
         String existingGst = safe(existing.getGstNumber());
         String newGst = safe(request.getGstNumber());
 
-        if (!existingGst.equals(newGst)
+        if (hasText(newGst)
+                && !existingGst.equals(newGst)
                 && repository.existsByGstNumberAndDeletedFalse(newGst)) {
             throw new BusinessException("Another customer with this GST Number already exists", HttpStatus.CONFLICT);
         }
@@ -110,7 +114,8 @@ public class CustomerService {
         String existingPhone = safe(existing.getPhone());
         String newPhone = safe(request.getPhone());
 
-        if (!existingPhone.equals(newPhone)
+        if (hasText(newPhone)
+                && !existingPhone.equals(newPhone)
                 && repository.existsByPhoneAndDeletedFalse(newPhone)) {
             throw new BusinessException("Another customer with this phone number already exists", HttpStatus.CONFLICT);
         }
@@ -118,55 +123,50 @@ public class CustomerService {
         String existingEmail = safe(existing.getEmail()).toLowerCase();
         String newEmail = safe(request.getEmail()).toLowerCase();
 
-        if (!existingEmail.equals(newEmail)
-                && hasText(newEmail)
+        if (hasText(newEmail)
+                && !existingEmail.equals(newEmail)
                 && repository.existsByEmailIgnoreCaseAndDeletedFalse(newEmail)) {
             throw new BusinessException("Another customer with this email already exists", HttpStatus.CONFLICT);
         }
     }
 
     private void normalizeRequest(CustomerRequest request) {
-        if (request.getName() != null) {
-            request.setName(request.getName().trim());
-        }
-
-        if (request.getPhone() != null) {
-            request.setPhone(request.getPhone().trim());
-        }
-
-        if (request.getEmail() != null) {
-            request.setEmail(request.getEmail().trim().toLowerCase());
-        }
-
-        if (request.getAddress() != null) {
-            request.setAddress(request.getAddress().trim());
-        }
-
-        if (request.getGstNumber() != null) {
-            request.setGstNumber(request.getGstNumber().trim().toUpperCase());
-        }
+        request.setName(clean(request.getName()));
+        request.setPhone(clean(request.getPhone()));
+        request.setEmail(cleanLower(request.getEmail()));
+        request.setAddress(clean(request.getAddress()));
+        request.setGstNumber(cleanUpper(request.getGstNumber()));
+        request.setDlNumber(cleanUpper(request.getDlNumber()));
+        request.setState(clean(request.getState()));
+        request.setStateCode(clean(request.getStateCode()));
     }
 
     private void normalizeCustomerEntity(Customer customer) {
-        if (customer.getName() != null) {
-            customer.setName(customer.getName().trim());
-        }
+        customer.setName(clean(customer.getName()));
+        customer.setPhone(clean(customer.getPhone()));
+        customer.setEmail(cleanLower(customer.getEmail()));
+        customer.setAddress(clean(customer.getAddress()));
+        customer.setGstNumber(cleanUpper(customer.getGstNumber()));
+        customer.setDlNumber(cleanUpper(customer.getDlNumber()));
+        customer.setState(clean(customer.getState()));
+        customer.setStateCode(clean(customer.getStateCode()));
+    }
 
-        if (customer.getPhone() != null) {
-            customer.setPhone(customer.getPhone().trim());
+    private String clean(String value) {
+        if (!hasText(value)) {
+            return null;
         }
+        return value.trim();
+    }
 
-        if (customer.getEmail() != null) {
-            customer.setEmail(customer.getEmail().trim().toLowerCase());
-        }
+    private String cleanLower(String value) {
+        String cleaned = clean(value);
+        return cleaned == null ? null : cleaned.toLowerCase();
+    }
 
-        if (customer.getAddress() != null) {
-            customer.setAddress(customer.getAddress().trim());
-        }
-
-        if (customer.getGstNumber() != null) {
-            customer.setGstNumber(customer.getGstNumber().trim().toUpperCase());
-        }
+    private String cleanUpper(String value) {
+        String cleaned = clean(value);
+        return cleaned == null ? null : cleaned.toUpperCase();
     }
 
     private boolean hasText(String value) {
