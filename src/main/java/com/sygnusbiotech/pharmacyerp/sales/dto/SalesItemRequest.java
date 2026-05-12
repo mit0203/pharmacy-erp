@@ -1,11 +1,14 @@
 package com.sygnusbiotech.pharmacyerp.sales.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 public class SalesItemRequest {
@@ -13,33 +16,37 @@ public class SalesItemRequest {
     @NotBlank(message = "Medicine ID is required")
     private String medicineId;
 
+    /**
+     * Batch and expiry are normally auto-allocated using FEFO during confirm.
+     * They are kept optional here for draft/history compatibility.
+     */
     private String batchNumber;
-    private java.time.LocalDateTime expiryDate;
+    private LocalDateTime expiryDate;
 
     @NotNull(message = "Quantity is required")
-    @Min(value = 0, message = "Quantity must be greater than or equal to 0")
+    @Min(value = 1, message = "Quantity must be greater than 0")
     private Integer quantity;
 
-    // Optional: free quantity
+    @Min(value = 0, message = "Free quantity cannot be negative")
     private Integer freeQuantity;
 
     @NotNull(message = "Unit Price is required")
-    @Min(value = 0, message = "Unit Price must be greater than or equal to 0")
+    @DecimalMin(value = "0.01", message = "Unit price must be greater than 0")
     private BigDecimal unitPrice;
 
-    // Optional: MRP
+    @DecimalMin(value = "0.00", message = "MRP cannot be negative")
     private BigDecimal mrp;
 
-    // Optional: Pack info
     private String pack;
 
-    // Optional: HSN code
     private String hsn;
 
-    // Optional: discount percentage
+    @DecimalMin(value = "0.00", message = "Discount percentage cannot be negative")
+    @DecimalMax(value = "100.00", message = "Discount percentage cannot be greater than 100")
     private BigDecimal discountPercent;
 
     @NotNull(message = "GST Percentage is required")
-    @Min(value = 0, message = "GST Percentage must be greater than or equal to 0")
+    @DecimalMin(value = "0.00", message = "GST percentage cannot be negative")
+    @DecimalMax(value = "100.00", message = "GST percentage cannot be greater than 100")
     private BigDecimal gstPercentage;
 }
