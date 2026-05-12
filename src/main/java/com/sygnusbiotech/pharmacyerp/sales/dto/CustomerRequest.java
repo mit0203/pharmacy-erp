@@ -23,7 +23,7 @@ public class CustomerRequest {
     @NotBlank(message = "Address is required")
     private String address;
 
-    @NotBlank(message = "GST Number is required")
+    // Optional because normal customers may not have GST
     private String gstNumber;
 
     // Optional pharmacy fields
