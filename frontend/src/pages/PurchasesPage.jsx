@@ -765,12 +765,20 @@ export default function PurchasesPage() {
         return `Quantity must be greater than 0 for item ${i + 1}.`;
       }
 
-      if (item.unitPrice === '' || Number(item.unitPrice) < 0) {
-        return `Unit price must be valid for item ${i + 1}.`;
+      if (item.unitPrice === '' || Number(item.unitPrice) <= 0) {
+        return `Unit price must be greater than 0 for item ${i + 1}.`;
       }
 
-      if (Number(item.gstPercentage) < 0) {
-        return `GST cannot be negative for item ${i + 1}.`;
+      if (Number(item.freeQuantity || 0) < 0) {
+        return `Free quantity cannot be negative for item ${i + 1}.`;
+      }
+
+      if (Number(item.discountPercent || 0) < 0 || Number(item.discountPercent || 0) > 100) {
+        return `Discount must be between 0 and 100 for item ${i + 1}.`;
+      }
+
+      if (Number(item.gstPercentage || 0) < 0 || Number(item.gstPercentage || 0) > 100) {
+        return `GST must be between 0 and 100 for item ${i + 1}.`;
       }
     }
 
