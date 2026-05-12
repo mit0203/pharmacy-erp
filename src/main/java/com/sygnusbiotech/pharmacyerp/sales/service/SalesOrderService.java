@@ -841,18 +841,31 @@ public class SalesOrderService {
                 throw new BusinessException("Sales quantity must be greater than 0", HttpStatus.BAD_REQUEST);
             }
 
-            if (req.getUnitPrice() == null || req.getUnitPrice().compareTo(BigDecimal.ZERO) < 0) {
-                throw new BusinessException("Unit price cannot be negative", HttpStatus.BAD_REQUEST);
+            if (req.getUnitPrice() == null || req.getUnitPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BusinessException("Unit price must be greater than 0", HttpStatus.BAD_REQUEST);
             }
 
-            if (req.getGstPercentage() == null || req.getGstPercentage().compareTo(BigDecimal.ZERO) < 0) {
-                throw new BusinessException("GST percentage cannot be negative", HttpStatus.BAD_REQUEST);
+            int freeQty = req.getFreeQuantity() == null ? 0 : req.getFreeQuantity();
+            if (freeQty < 0) {
+                throw new BusinessException("Free quantity cannot be negative", HttpStatus.BAD_REQUEST);
             }
 
+            if (req.getGstPercentage() == null || req.getGstPercentage().compareTo(BigDecimal.ZERO) < 0
+                    || req.getGstPercentage().compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new BusinessException("GST percentage must be between 0 and 100", HttpStatus.BAD_REQUEST);
+            }
+
+            BigDecimal discountPercent = req.getDiscountPercent() != null ? req.getDiscountPercent() : BigDecimal.ZERO;
+            if (discountPercent.compareTo(BigDecimal.ZERO) < 0 || discountPercent.compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new BusinessException("Discount percentage must be between 0 and 100", HttpStatus.BAD_REQUEST);
+            }
+
+            int requiredStock = req.getQuantity() + freeQty;
             int availableStock = medicine.getStockQuantity() == null ? 0 : medicine.getStockQuantity();
-            if (availableStock < req.getQuantity()) {
+            if (availableStock < requiredStock) {
                 throw new BusinessException(
-                        "Not enough stock for medicine: " + displayMedicineName(medicine) + ". Available stock: " + availableStock,
+                        "Not enough stock for medicine: " + displayMedicineName(medicine)
+                                + ". Required: " + requiredStock + ", Available stock: " + availableStock,
                         HttpStatus.BAD_REQUEST
                 );
             }
@@ -860,11 +873,10 @@ public class SalesOrderService {
             BigDecimal unitPrice = req.getUnitPrice().setScale(2, RoundingMode.HALF_UP);
             BigDecimal gstPercentage = req.getGstPercentage().setScale(2, RoundingMode.HALF_UP);
             
-            // Calculate base amount
+            // Calculate base amount only on billable quantity. Free quantity affects stock only.
             BigDecimal itemBaseTotal = unitPrice.multiply(BigDecimal.valueOf(req.getQuantity())).setScale(2, RoundingMode.HALF_UP);
             
             // Apply discount if any
-            BigDecimal discountPercent = req.getDiscountPercent() != null ? req.getDiscountPercent() : BigDecimal.ZERO;
             BigDecimal discountAmt = itemBaseTotal.multiply(discountPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
             
             BigDecimal taxableValue = itemBaseTotal.subtract(discountAmt).setScale(2, RoundingMode.HALF_UP);
