@@ -624,17 +624,17 @@ public class PurchaseOrderService {
                 if (freeQtyValue < 0) {
                     throw new BusinessException("Free quantity cannot be negative", HttpStatus.BAD_REQUEST);
                 }
-                if (unitPrice.compareTo(BigDecimal.ZERO) < 0) {
-                    throw new BusinessException("Unit price cannot be negative", HttpStatus.BAD_REQUEST);
+                if (unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new BusinessException("Unit price must be greater than 0", HttpStatus.BAD_REQUEST);
                 }
                 if (mrp.compareTo(BigDecimal.ZERO) < 0) {
                     throw new BusinessException("MRP cannot be negative", HttpStatus.BAD_REQUEST);
                 }
-                if (discountPct.compareTo(BigDecimal.ZERO) < 0) {
-                    throw new BusinessException("Discount percentage cannot be negative", HttpStatus.BAD_REQUEST);
+                if (discountPct.compareTo(BigDecimal.ZERO) < 0 || discountPct.compareTo(BigDecimal.valueOf(100)) > 0) {
+                    throw new BusinessException("Discount percentage must be between 0 and 100", HttpStatus.BAD_REQUEST);
                 }
-                if (gstPct.compareTo(BigDecimal.ZERO) < 0) {
-                    throw new BusinessException("GST percentage cannot be negative", HttpStatus.BAD_REQUEST);
+                if (gstPct.compareTo(BigDecimal.ZERO) < 0 || gstPct.compareTo(BigDecimal.valueOf(100)) > 0) {
+                    throw new BusinessException("GST percentage must be between 0 and 100", HttpStatus.BAD_REQUEST);
                 }
 
                 BigDecimal qty = BigDecimal.valueOf(qtyValue);
