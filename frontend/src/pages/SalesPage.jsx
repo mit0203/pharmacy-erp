@@ -722,25 +722,30 @@ export default function SalesPage() {
   };
 
   const createTotals = useMemo(() => {
-    const subtotal = formData.items.reduce((sum, item) => {
-      const quantity = Number(item.quantity || 0);
-      const unitPrice = Number(item.unitPrice || 0);
-      return sum + quantity * unitPrice;
-    }, 0);
+    const totals = formData.items.reduce(
+      (acc, item) => {
+        const quantity = Number(item.quantity || 0);
+        const unitPrice = Number(item.unitPrice || 0);
+        const discountPercent = Number(item.discountPercent || 0);
+        const gstPercentage = Number(item.gstPercentage || 0);
 
-    const gstTotal = formData.items.reduce((sum, item) => {
-      const quantity = Number(item.quantity || 0);
-      const unitPrice = Number(item.unitPrice || 0);
-      const gstPercentage = Number(item.gstPercentage || 0);
-      const lineTotal = quantity * unitPrice;
-      return sum + (lineTotal * gstPercentage) / 100;
-    }, 0);
+        const baseAmount = quantity * unitPrice;
+        const discountAmount = (baseAmount * discountPercent) / 100;
+        const taxableValue = Math.max(baseAmount - discountAmount, 0);
+        const gstAmount = (taxableValue * gstPercentage) / 100;
+
+        acc.subtotal += taxableValue;
+        acc.gstTotal += gstAmount;
+        acc.itemCount += quantity;
+        acc.stockMovementQty += quantity + Number(item.freeQuantity || 0);
+        return acc;
+      },
+      { subtotal: 0, gstTotal: 0, itemCount: 0, stockMovementQty: 0 }
+    );
 
     return {
-      subtotal,
-      gstTotal,
-      total: subtotal + gstTotal,
-      itemCount: formData.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+      ...totals,
+      total: totals.subtotal + totals.gstTotal,
     };
   }, [formData]);
 
@@ -764,23 +769,32 @@ export default function SalesPage() {
         return `Quantity must be greater than 0 for item ${i + 1}.`;
       }
 
-      if (item.unitPrice === '' || Number(item.unitPrice) < 0) {
-        return `Unit price must be valid for item ${i + 1}.`;
+      if (item.unitPrice === '' || Number(item.unitPrice) <= 0) {
+        return `Unit price must be greater than 0 for item ${i + 1}.`;
       }
 
-      if (Number(item.gstPercentage) < 0) {
-        return `GST cannot be negative for item ${i + 1}.`;
+      if (Number(item.freeQuantity || 0) < 0) {
+        return `Free quantity cannot be negative for item ${i + 1}.`;
+      }
+
+      if (Number(item.discountPercent || 0) < 0 || Number(item.discountPercent || 0) > 100) {
+        return `Discount must be between 0 and 100 for item ${i + 1}.`;
+      }
+
+      if (Number(item.gstPercentage || 0) < 0 || Number(item.gstPercentage || 0) > 100) {
+        return `GST must be between 0 and 100 for item ${i + 1}.`;
       }
 
       const selectedMedicine = medicineMap[String(item.medicineId)];
       const stockQuantity = Number(selectedMedicine?.stockQuantity ?? 0);
+      const requiredStockQty = Number(item.quantity || 0) + Number(item.freeQuantity || 0);
 
       if (
         selectedMedicine &&
-        Number(item.quantity) > stockQuantity &&
+        requiredStockQty > stockQuantity &&
         !isEditMode
       ) {
-        return `Requested quantity exceeds stock for item ${i + 1}. Available stock: ${stockQuantity}.`;
+        return `Requested quantity exceeds stock for item ${i + 1}. Required: ${requiredStockQty}, available: ${stockQuantity}.`;
       }
     }
 
@@ -797,6 +811,7 @@ export default function SalesPage() {
     reverseCharge: formData.reverseCharge || false,
     termsAndConditions: formData.termsAndConditions?.trim() || '',
     items: formData.items.map((item) => ({
+      medicineId: item.medicineId,
       batchNumber: item.batchNumber || null,
       expiryDate: item.expiryDate ? item.expiryDate + "T00:00:00" : null,
       quantity: Number(item.quantity),
