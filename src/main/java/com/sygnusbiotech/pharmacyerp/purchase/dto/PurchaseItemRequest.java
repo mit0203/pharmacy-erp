@@ -1,5 +1,7 @@
 package com.sygnusbiotech.pharmacyerp.purchase.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,32 +17,32 @@ public class PurchaseItemRequest {
 
     private String batchNumber;
 
-    private String expiryDate; // ISO formatted string or just MM/yyyy or dd/MM/yyyy
+    private String expiryDate;
 
     @NotNull(message = "Quantity is required")
-    @Min(value = 0, message = "Quantity must be greater than or equal to 0")
+    @Min(value = 1, message = "Quantity must be greater than 0")
     private Integer quantity;
 
-    // Optional: free quantity
+    @Min(value = 0, message = "Free quantity cannot be negative")
     private Integer freeQuantity;
 
     @NotNull(message = "Unit Price is required")
-    @Min(value = 0, message = "Unit Price must be greater than or equal to 0")
+    @DecimalMin(value = "0.01", message = "Unit price must be greater than 0")
     private BigDecimal unitPrice;
 
-    // Optional: MRP
+    @DecimalMin(value = "0.00", message = "MRP cannot be negative")
     private BigDecimal mrp;
 
-    // Optional: Pack info
     private String pack;
 
-    // Optional: HSN code
     private String hsn;
 
-    // Optional: discount percentage
+    @DecimalMin(value = "0.00", message = "Discount percentage cannot be negative")
+    @DecimalMax(value = "100.00", message = "Discount percentage cannot be greater than 100")
     private BigDecimal discountPercent;
 
     @NotNull(message = "GST Percentage is required")
-    @Min(value = 0, message = "GST Percentage must be greater than or equal to 0")
+    @DecimalMin(value = "0.00", message = "GST percentage cannot be negative")
+    @DecimalMax(value = "100.00", message = "GST percentage cannot be greater than 100")
     private BigDecimal gstPercentage;
 }
