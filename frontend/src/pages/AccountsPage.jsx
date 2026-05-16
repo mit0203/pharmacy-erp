@@ -906,7 +906,7 @@ export default function AccountsPage() {
     setShowAccountModal(false);
     setEditingAccount(null);
     setFormError('');
-    setAccountForm(defaultAccountForm);
+    setAccountForm({ ...defaultAccountForm });
   };
 
   const closeLedgerModal = () => {
@@ -1281,7 +1281,7 @@ export default function AccountsPage() {
   const openCreateAccount = () => {
     setEditingAccount(null);
     setFormError('');
-    setAccountForm(defaultAccountForm);
+    setAccountForm({ ...defaultAccountForm });
     setShowAccountModal(true);
   };
 
@@ -1342,8 +1342,25 @@ export default function AccountsPage() {
     e.preventDefault();
     setFormError('');
 
-    if (!accountForm.accountCode.trim() || !accountForm.accountName.trim()) {
+    const accountCode = accountForm.accountCode?.trim();
+    const accountName = accountForm.accountName?.trim();
+    const openingBalance =
+      accountForm.openingBalance === '' || accountForm.openingBalance === null
+        ? 0
+        : Number(accountForm.openingBalance);
+
+    if (!accountCode || !accountName) {
       setFormError('Account code and account name are required.');
+      return;
+    }
+
+    if (!accountForm.accountType) {
+      setFormError('Account type is required.');
+      return;
+    }
+
+    if (Number.isNaN(openingBalance)) {
+      setFormError('Opening balance must be a valid number.');
       return;
     }
 
@@ -1351,14 +1368,11 @@ export default function AccountsPage() {
       setSubmitting(true);
 
       const payload = {
-        accountCode: accountForm.accountCode.trim(),
-        accountName: accountForm.accountName.trim(),
+        accountCode,
+        accountName,
         accountType: accountForm.accountType,
         parentAccountId: accountForm.parentAccountId || null,
-        openingBalance:
-          accountForm.openingBalance === ''
-            ? 0
-            : Number(accountForm.openingBalance || 0),
+        openingBalance,
         active: Boolean(accountForm.active),
       };
 
