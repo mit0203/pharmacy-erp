@@ -1,23 +1,39 @@
 package com.sygnusbiotech.pharmacyerp.sales.service;
 
-import com.lowagie.text.*;
-import com.lowagie.text.pdf.*;
+import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
+import com.lowagie.text.Element;
+import com.lowagie.text.Font;
+import com.lowagie.text.FontFactory;
+import com.lowagie.text.Image;
+import com.lowagie.text.PageSize;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
+import com.lowagie.text.Rectangle;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfWriter;
 
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Professional Sales Invoice PDF generator for Pharmacy ERP.
+ * Sales/Purchase GST Tax Invoice PDF generator.
  *
- * Manual company details are used directly from this file.
- * Removed: GST No, DL No, QR/e-Invoice placeholder, Mumbai jurisdiction line, and bank details section.
+ * Current custom format:
+ * - Uses manual company details.
+ * - Loads logo from src/main/resources/logo.png.
+ * - Removes GSTIN and DL No from company header.
+ * - Removes GSTIN and DL No from buyer box.
+ * - Removes QR/e-Invoice section.
+ * - Removes jurisdiction line.
+ * - Removes bank details.
+ * - Removes declaration and authorized signatory block.
  */
 public final class InvoicePdfGenerator {
 
@@ -26,7 +42,8 @@ public final class InvoicePdfGenerator {
 
     // ==================== MANUAL COMPANY DETAILS ====================
     private static final String MANUAL_COMPANY_NAME = "Sygnus Biotech";
-    private static final String MANUAL_COMPANY_ADDRESS = "F/5 To F/9 N.V.Complex, Tavadiya Cross Road, Ahmedabad Abu Road Highway, Sidhpur-384151 (Gujarat) INDIA.";
+    private static final String MANUAL_COMPANY_ADDRESS =
+            "F/5 To F/9 N.V.Complex, Tavadiya Cross Road, Ahmedabad Abu Road Highway, Sidhpur-384151 (Gujarat) INDIA.";
     private static final String MANUAL_COMPANY_PHONE = "+91 98253 24786";
     private static final String MANUAL_COMPANY_EMAIL = "sygnusbiotech@yahoo.in";
     private static final String MANUAL_COMPANY_STATE = "Gujarat";
@@ -34,36 +51,28 @@ public final class InvoicePdfGenerator {
 
     // ==================== COLORS ====================
     private static final Color PRIMARY = new Color(0, 77, 64);
-    private static final Color PRIMARY_DARK = new Color(0, 55, 48);
     private static final Color PRIMARY_LIGHT = new Color(232, 245, 233);
     private static final Color HEADER_BG = new Color(0, 77, 64);
     private static final Color ROW_ALT = new Color(245, 250, 248);
     private static final Color BORDER = new Color(189, 189, 189);
-    private static final Color LIGHT_BORDER = new Color(224, 224, 224);
     private static final Color TEXT = new Color(33, 33, 33);
     private static final Color TEXT_SEC = new Color(97, 97, 97);
     private static final Color GRAND_BG = new Color(0, 77, 64);
-    private static final Color SOFT_BG = new Color(250, 253, 251);
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("dd-MM-yyyy hh:mm a");
 
-    private static final String LOGO_PATH = System.getProperty(
-            "app.logo.path",
-            System.getenv().getOrDefault("APP_LOGO_PATH", "frontend/public/logo.png")
-    );
-
     // ==================== FONTS ====================
-    private static Font f(String name, int size, Color c) {
-        return FontFactory.getFont(name, size, c);
+    private static Font f(String name, int size, Color color) {
+        return FontFactory.getFont(name, size, color);
     }
 
-    private static Font fB(int size, Color c) {
-        return f(FontFactory.HELVETICA_BOLD, size, c);
+    private static Font fB(int size, Color color) {
+        return f(FontFactory.HELVETICA_BOLD, size, color);
     }
 
-    private static Font fN(int size, Color c) {
-        return f(FontFactory.HELVETICA, size, c);
+    private static Font fN(int size, Color color) {
+        return f(FontFactory.HELVETICA, size, color);
     }
 
     /**
@@ -74,7 +83,7 @@ public final class InvoicePdfGenerator {
         public String title = "TAX INVOICE";
         public String subtitle = "SALES INVOICE";
 
-        // Company fields are kept for compatibility, but manual constants above are used in PDF.
+        // Company - kept for compatibility, but PDF uses manual constants above
         public String companyName;
         public String companyAddress;
         public String companyPhone;
@@ -84,13 +93,13 @@ public final class InvoicePdfGenerator {
         public String companyStateCode;
         public String companyState;
 
-        // Bank fields are kept for compatibility, but bank section is removed from PDF.
+        // Bank - kept for compatibility, but bank section is removed
         public String bankName;
         public String bankAccount;
         public String bankIfsc;
         public String bankBranch;
 
-        // Party
+        // Party / buyer / supplier
         public String partyLabel = "Bill To";
         public String partyName;
         public String partyAddress;
@@ -158,15 +167,15 @@ public final class InvoicePdfGenerator {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Document doc = new Document(PageSize.A4, 28, 28, 20, 20);
             PdfWriter.getInstance(doc, out);
+
             doc.open();
 
-            addHeader(doc, d);
-            addInvoiceTitle(doc, d);
+            addHeader(doc);
+            addBanner(doc, d);
             addPartyAndInvoiceInfo(doc, d);
             addItemsTable(doc, d);
             addTotalsSection(doc, d);
             addAmountInWords(doc, d);
-            addSignatureSection(doc);
             addTermsAndFooter(doc, d);
 
             doc.close();
@@ -177,128 +186,125 @@ public final class InvoicePdfGenerator {
     }
 
     // ==================== HEADER ====================
-    private static void addHeader(Document doc, InvoiceData d) throws DocumentException {
-        PdfPTable wrapper = new PdfPTable(1);
-        wrapper.setWidthPercentage(100);
-        wrapper.setSpacingAfter(6f);
-
-        PdfPCell box = new PdfPCell();
-        box.setPadding(0f);
-        box.setBorderColor(PRIMARY);
-        box.setBorderWidth(1f);
-        box.setBackgroundColor(Color.WHITE);
-
-        PdfPTable header = new PdfPTable(2);
-        header.setWidthPercentage(100);
-        header.setWidths(new float[]{1.05f, 2.95f});
+    private static void addHeader(Document doc) throws DocumentException {
+        PdfPTable table = new PdfPTable(2);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{1.15f, 2.4f});
+        table.setSpacingAfter(6f);
 
         PdfPCell logoCell = new PdfPCell();
         logoCell.setBorder(Rectangle.NO_BORDER);
-        logoCell.setPadding(8f);
         logoCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        logoCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-        logoCell.setBackgroundColor(SOFT_BG);
+        logoCell.setHorizontalAlignment(Element.ALIGN_LEFT);
+        logoCell.setPadding(4f);
 
-        try {
-            Path p = Paths.get(LOGO_PATH);
-            if (Files.exists(p)) {
-                Image img = Image.getInstance(p.toAbsolutePath().toString());
-                img.scaleToFit(86f, 72f);
-                logoCell.addElement(img);
+        try (InputStream logoStream = InvoicePdfGenerator.class
+                .getClassLoader()
+                .getResourceAsStream("logo.png")) {
+
+            if (logoStream != null) {
+                Image logo = Image.getInstance(logoStream.readAllBytes());
+                logo.scaleToFit(110f, 68f);
+                logo.setAlignment(Element.ALIGN_LEFT);
+                logoCell.addElement(logo);
             } else {
-                Paragraph logoText = new Paragraph(MANUAL_COMPANY_NAME, fB(15, PRIMARY));
-                logoText.setAlignment(Element.ALIGN_CENTER);
-                logoCell.addElement(logoText);
+                logoCell.addElement(new Paragraph(MANUAL_COMPANY_NAME, fB(16, PRIMARY)));
             }
         } catch (Exception e) {
-            Paragraph logoText = new Paragraph(MANUAL_COMPANY_NAME, fB(15, PRIMARY));
-            logoText.setAlignment(Element.ALIGN_CENTER);
-            logoCell.addElement(logoText);
+            logoCell.addElement(new Paragraph(MANUAL_COMPANY_NAME, fB(16, PRIMARY)));
         }
 
-        header.addCell(logoCell);
+        table.addCell(logoCell);
 
-        PdfPCell details = new PdfPCell();
-        details.setBorder(Rectangle.NO_BORDER);
-        details.setPadding(8f);
-        details.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        details.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        PdfPCell companyCell = new PdfPCell();
+        companyCell.setBorder(Rectangle.NO_BORDER);
+        companyCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        companyCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        companyCell.setPadding(4f);
 
-        Paragraph companyName = new Paragraph(MANUAL_COMPANY_NAME, fB(18, PRIMARY_DARK));
+        Paragraph companyName = new Paragraph(MANUAL_COMPANY_NAME, fB(17, PRIMARY));
         companyName.setAlignment(Element.ALIGN_RIGHT);
-        companyName.setSpacingAfter(3f);
-        details.addElement(companyName);
+        companyCell.addElement(companyName);
 
-        Paragraph address = new Paragraph(MANUAL_COMPANY_ADDRESS, fN(8, TEXT_SEC));
-        address.setAlignment(Element.ALIGN_RIGHT);
-        address.setLeading(10f);
-        details.addElement(address);
+        addRightLine(companyCell, MANUAL_COMPANY_ADDRESS, fN(7.5f, TEXT_SEC));
+        addRightLine(
+                companyCell,
+                "Phone: " + MANUAL_COMPANY_PHONE + "  |  Email: " + MANUAL_COMPANY_EMAIL,
+                fN(8, TEXT_SEC)
+        );
+        addRightLine(
+                companyCell,
+                "State: " + MANUAL_COMPANY_STATE + " (" + MANUAL_COMPANY_STATE_CODE + ")",
+                fN(8, TEXT_SEC)
+        );
 
-        addRightLine(details, "Phone: " + MANUAL_COMPANY_PHONE + "  |  Email: " + MANUAL_COMPANY_EMAIL, fN(8, TEXT_SEC));
-        addRightLine(details, "State: " + MANUAL_COMPANY_STATE + " (" + MANUAL_COMPANY_STATE_CODE + ")", fN(8, TEXT_SEC));
-
-        header.addCell(details);
-        box.addElement(header);
-        wrapper.addCell(box);
-        doc.add(wrapper);
+        table.addCell(companyCell);
+        doc.add(table);
     }
 
-    // ==================== TITLE ====================
-    private static void addInvoiceTitle(Document doc, InvoiceData d) throws DocumentException {
-        PdfPTable t = new PdfPTable(1);
-        t.setWidthPercentage(100);
+    // ==================== BANNER ====================
+    private static void addBanner(Document doc, InvoiceData d) throws DocumentException {
+        PdfPTable table = new PdfPTable(1);
+        table.setWidthPercentage(100);
 
-        PdfPCell c = new PdfPCell(new Phrase(safe(d.title), fB(14, Color.WHITE)));
-        c.setBackgroundColor(HEADER_BG);
-        c.setPadding(8f);
-        c.setHorizontalAlignment(Element.ALIGN_CENTER);
-        c.setBorderColor(HEADER_BG);
+        PdfPCell cell = new PdfPCell(new Phrase(safe(d.title), fB(14, Color.WHITE)));
+        cell.setBackgroundColor(HEADER_BG);
+        cell.setPadding(8f);
+        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cell.setBorderColor(HEADER_BG);
 
-        t.addCell(c);
-        t.setSpacingAfter(8f);
-        doc.add(t);
+        table.addCell(cell);
+        table.setSpacingAfter(8f);
+
+        doc.add(table);
     }
 
     // ==================== PARTY + INVOICE INFO ====================
     private static void addPartyAndInvoiceInfo(Document doc, InvoiceData d) throws DocumentException {
-        PdfPTable t = new PdfPTable(2);
-        t.setWidthPercentage(100);
-        t.setWidths(new float[]{1f, 1f});
-        t.setSpacingAfter(10f);
+        PdfPTable table = new PdfPTable(2);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{1f, 1f});
+        table.setSpacingAfter(10f);
 
-        PdfPCell party = card(PRIMARY_LIGHT);
-        party.addElement(sectionTitle(safe(d.partyLabel)));
-        addCardRow(party, "Name", safe(d.partyName));
-        addCardRow(party, "Address", safe(d.partyAddress));
-        addCardRow(party, "Phone", safe(d.partyPhone));
+        PdfPCell partyCell = card(PRIMARY_LIGHT);
+        partyCell.addElement(new Paragraph(safe(d.partyLabel), fB(10, PRIMARY)));
+        addCardRow(partyCell, "Name", safe(d.partyName));
+        addCardRow(partyCell, "Address", safe(d.partyAddress));
+        addCardRow(partyCell, "Phone", safe(d.partyPhone));
+
         if (hasText(d.partyEmail)) {
-            addCardRow(party, "Email", safe(d.partyEmail));
+            addCardRow(partyCell, "Email", safe(d.partyEmail));
         }
-        if (hasText(d.partyState) || hasText(d.partyStateCode)) {
-            addCardRow(party, "State", stateText(d.partyState, d.partyStateCode));
-        }
-        t.addCell(party);
 
-        PdfPCell inv = card(Color.WHITE);
-        inv.addElement(sectionTitle("Invoice Details"));
-        addCardRow(inv, "Invoice No", safe(d.invoiceNumber));
+        if (hasText(d.partyState) || hasText(d.partyStateCode)) {
+            addCardRow(partyCell, "State", stateText(d.partyState, d.partyStateCode));
+        }
+
+        table.addCell(partyCell);
+
+        PdfPCell invoiceCell = card(Color.WHITE);
+        invoiceCell.addElement(new Paragraph("Invoice Details", fB(10, PRIMARY)));
+        addCardRow(invoiceCell, "Invoice No", safe(d.invoiceNumber));
+
         if (d.subtitle != null
                 && d.subtitle.toUpperCase().contains("PURCHASE")
                 && hasText(d.supplierInvoiceNumber)) {
-            addCardRow(inv, "Supplier Invoice No", safe(d.supplierInvoiceNumber));
+            addCardRow(invoiceCell, "Supplier Invoice No", safe(d.supplierInvoiceNumber));
         }
-        addCardRow(inv, "Invoice Date", fmtDt(d.invoiceDate));
-        addCardRow(inv, "Order No", safe(d.orderNumber));
-        addCardRow(inv, "Order Date", fmtDt(d.orderDate));
-        addCardRow(inv, "Due Date", fmtDt(d.dueDate));
-        addCardRow(inv, "LR No", safe(d.lrNumber));
-        addCardRow(inv, "Transport", safe(d.transport));
-        addCardRow(inv, "Place of Supply", safe(d.placeOfSupply));
-        addCardRow(inv, "Reverse Charge", d.reverseCharge ? "Yes" : "No");
-        addCardRow(inv, "Payment", safe(d.paymentStatus));
-        t.addCell(inv);
 
-        doc.add(t);
+        addCardRow(invoiceCell, "Invoice Date", fmtDt(d.invoiceDate));
+        addCardRow(invoiceCell, "Order No", safe(d.orderNumber));
+        addCardRow(invoiceCell, "Order Date", fmtDt(d.orderDate));
+        addCardRow(invoiceCell, "Due Date", fmtDt(d.dueDate));
+        addCardRow(invoiceCell, "LR No", safe(d.lrNumber));
+        addCardRow(invoiceCell, "Transport", safe(d.transport));
+        addCardRow(invoiceCell, "Place of Supply", safe(d.placeOfSupply));
+        addCardRow(invoiceCell, "Reverse Charge", d.reverseCharge ? "Yes" : "No");
+        addCardRow(invoiceCell, "Payment", safe(d.paymentStatus));
+
+        table.addCell(invoiceCell);
+        doc.add(table);
     }
 
     // ==================== ITEMS TABLE ====================
@@ -313,201 +319,171 @@ public final class InvoicePdfGenerator {
                 0.55f, 0.5f, 0.55f, 0.9f, 0.85f, 0.85f, 0.85f, 1.0f
         };
 
-        PdfPTable t = new PdfPTable(headers.length);
-        t.setWidthPercentage(100);
-        t.setWidths(widths);
-        t.setSpacingAfter(6f);
-        t.setHeaderRows(1);
+        PdfPTable table = new PdfPTable(headers.length);
+        table.setWidthPercentage(100);
+        table.setWidths(widths);
+        table.setSpacingAfter(6f);
+        table.setHeaderRows(1);
 
         Font headerFont = fB(7, Color.WHITE);
-        for (String h : headers) {
-            PdfPCell c = new PdfPCell(new Phrase(h, headerFont));
-            c.setBackgroundColor(HEADER_BG);
-            c.setBorderColor(HEADER_BG);
-            c.setPadding(4f);
-            c.setHorizontalAlignment(Element.ALIGN_CENTER);
-            c.setVerticalAlignment(Element.ALIGN_MIDDLE);
-            t.addCell(c);
+
+        for (String header : headers) {
+            PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
+            cell.setBackgroundColor(HEADER_BG);
+            cell.setBorderColor(HEADER_BG);
+            cell.setPadding(4f);
+            cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+            cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            table.addCell(cell);
         }
 
         Font bodyFont = fN(7, TEXT);
         Font boldBodyFont = fB(7, TEXT);
 
         for (int i = 0; i < d.itemCount; i++) {
-            Color bg = (i % 2 == 1) ? ROW_ALT : Color.WHITE;
+            Color bg = i % 2 == 1 ? ROW_ALT : Color.WHITE;
 
-            addCell(t, String.valueOf(i + 1), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, safe(arrayValue(d.medicineName, i)), bodyFont, Element.ALIGN_LEFT, bg);
-            addCell(t, safe(arrayValue(d.pack, i)), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, safe(arrayValue(d.hsn, i)), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, safe(arrayValue(d.batchNumber, i)), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, safe(arrayValue(d.expDate, i)), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, money(arrayValue(d.mrp, i)), bodyFont, Element.ALIGN_RIGHT, bg);
-            addCell(t, money(arrayValue(d.rate, i)), bodyFont, Element.ALIGN_RIGHT, bg);
-            addCell(t, String.valueOf(intArrayValue(d.qty, i)), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, String.valueOf(intArrayValue(d.freeQty, i)), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, pct(arrayValue(d.discPct, i)), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, money(arrayValue(d.taxableValue, i)), bodyFont, Element.ALIGN_RIGHT, bg);
+            addCell(table, String.valueOf(i + 1), bodyFont, Element.ALIGN_CENTER, bg);
+            addCell(table, safe(arrayValue(d.medicineName, i)), bodyFont, Element.ALIGN_LEFT, bg);
+            addCell(table, safe(arrayValue(d.pack, i)), bodyFont, Element.ALIGN_CENTER, bg);
+            addCell(table, safe(arrayValue(d.hsn, i)), bodyFont, Element.ALIGN_CENTER, bg);
+            addCell(table, safe(arrayValue(d.batchNumber, i)), bodyFont, Element.ALIGN_CENTER, bg);
+            addCell(table, safe(arrayValue(d.expDate, i)), bodyFont, Element.ALIGN_CENTER, bg);
+            addCell(table, money(arrayValue(d.mrp, i)), bodyFont, Element.ALIGN_RIGHT, bg);
+            addCell(table, money(arrayValue(d.rate, i)), bodyFont, Element.ALIGN_RIGHT, bg);
+            addCell(table, String.valueOf(intArrayValue(d.qty, i)), bodyFont, Element.ALIGN_CENTER, bg);
+            addCell(table, String.valueOf(intArrayValue(d.freeQty, i)), bodyFont, Element.ALIGN_CENTER, bg);
+            addCell(table, pct(arrayValue(d.discPct, i)), bodyFont, Element.ALIGN_CENTER, bg);
+            addCell(table, money(arrayValue(d.taxableValue, i)), bodyFont, Element.ALIGN_RIGHT, bg);
 
-            addCell(t, pct(arrayValue(d.cgstPct, i)) + "\n" + money(arrayValue(d.cgstAmt, i)), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, pct(arrayValue(d.sgstPct, i)) + "\n" + money(arrayValue(d.sgstAmt, i)), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, pct(arrayValue(d.igstPct, i)) + "\n" + money(arrayValue(d.igstAmt, i)), bodyFont, Element.ALIGN_CENTER, bg);
-            addCell(t, money(arrayValue(d.lineTotal, i)), boldBodyFont, Element.ALIGN_RIGHT, bg);
+            String cgst = pct(arrayValue(d.cgstPct, i)) + "\n" + money(arrayValue(d.cgstAmt, i));
+            addCell(table, cgst, bodyFont, Element.ALIGN_CENTER, bg);
+
+            String sgst = pct(arrayValue(d.sgstPct, i)) + "\n" + money(arrayValue(d.sgstAmt, i));
+            addCell(table, sgst, bodyFont, Element.ALIGN_CENTER, bg);
+
+            String igst = pct(arrayValue(d.igstPct, i)) + "\n" + money(arrayValue(d.igstAmt, i));
+            addCell(table, igst, bodyFont, Element.ALIGN_CENTER, bg);
+
+            addCell(table, money(arrayValue(d.lineTotal, i)), boldBodyFont, Element.ALIGN_RIGHT, bg);
         }
 
-        doc.add(t);
+        doc.add(table);
     }
 
     // ==================== TOTALS ====================
     private static void addTotalsSection(Document doc, InvoiceData d) throws DocumentException {
-        PdfPTable t = new PdfPTable(2);
-        t.setWidthPercentage(45);
-        t.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        t.setWidths(new float[]{2f, 1.5f});
-        t.setSpacingAfter(6f);
+        PdfPTable table = new PdfPTable(2);
+        table.setWidthPercentage(45);
+        table.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        table.setWidths(new float[]{2f, 1.5f});
+        table.setSpacingAfter(6f);
 
-        addTotalRow(t, "Total Quantity", String.valueOf(d.totalQty));
-        addTotalRow(t, "Total Taxable Amount", money(d.totalTaxable));
-        addTotalRow(t, "Total CGST", money(d.totalCgst));
-        addTotalRow(t, "Total SGST", money(d.totalSgst));
+        addTotalRow(table, "Total Quantity", String.valueOf(d.totalQty));
+        addTotalRow(table, "Total Taxable Amount", money(d.totalTaxable));
+        addTotalRow(table, "Total CGST", money(d.totalCgst));
+        addTotalRow(table, "Total SGST", money(d.totalSgst));
 
         if (d.totalIgst != null && d.totalIgst.compareTo(BigDecimal.ZERO) > 0) {
-            addTotalRow(t, "Total IGST", money(d.totalIgst));
+            addTotalRow(table, "Total IGST", money(d.totalIgst));
         }
 
-        addTotalRow(t, "Round Off", money(d.roundOff));
+        addTotalRow(table, "Round Off", money(d.roundOff));
 
-        PdfPCell gl = new PdfPCell(new Phrase("Grand Total", fB(10, Color.WHITE)));
-        gl.setBackgroundColor(GRAND_BG);
-        gl.setBorderColor(GRAND_BG);
-        gl.setPadding(6f);
-        gl.setHorizontalAlignment(Element.ALIGN_LEFT);
-        t.addCell(gl);
+        PdfPCell grandLabel = new PdfPCell(new Phrase("Grand Total", fB(10, Color.WHITE)));
+        grandLabel.setBackgroundColor(GRAND_BG);
+        grandLabel.setBorderColor(GRAND_BG);
+        grandLabel.setPadding(6f);
+        grandLabel.setHorizontalAlignment(Element.ALIGN_LEFT);
+        table.addCell(grandLabel);
 
-        PdfPCell gv = new PdfPCell(new Phrase(money(d.grandTotal), fB(10, Color.WHITE)));
-        gv.setBackgroundColor(GRAND_BG);
-        gv.setBorderColor(GRAND_BG);
-        gv.setPadding(6f);
-        gv.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        t.addCell(gv);
+        PdfPCell grandValue = new PdfPCell(new Phrase(money(d.grandTotal), fB(10, Color.WHITE)));
+        grandValue.setBackgroundColor(GRAND_BG);
+        grandValue.setBorderColor(GRAND_BG);
+        grandValue.setPadding(6f);
+        grandValue.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        table.addCell(grandValue);
 
-        addTotalRow(t, "Amount Paid", money(d.amountPaid));
-        addTotalRow(t, "Balance Due", money(d.amountDue));
+        addTotalRow(table, "Amount Paid", money(d.amountPaid));
+        addTotalRow(table, "Balance Due", money(d.amountDue));
 
-        doc.add(t);
+        doc.add(table);
     }
 
     // ==================== AMOUNT IN WORDS ====================
     private static void addAmountInWords(Document doc, InvoiceData d) throws DocumentException {
-        BigDecimal amt = d.grandTotal != null ? d.grandTotal : BigDecimal.ZERO;
-        String words = convertToWords(amt.setScale(0, RoundingMode.HALF_UP).longValue());
+        BigDecimal amount = d.grandTotal != null ? d.grandTotal : BigDecimal.ZERO;
+        String words = convertToWords(amount.setScale(0, RoundingMode.HALF_UP).longValue());
 
-        Paragraph p = new Paragraph("Amount in Words: " + words + " Rupees Only", fB(8, TEXT));
-        p.setSpacingAfter(6f);
-        doc.add(p);
-    }
-
-    // ==================== SIGNATURE ====================
-    private static void addSignatureSection(Document doc) throws DocumentException {
-        PdfPTable t = new PdfPTable(2);
-        t.setWidthPercentage(100);
-        t.setWidths(new float[]{1.2f, 1f});
-        t.setSpacingAfter(8f);
-
-        PdfPCell note = new PdfPCell();
-        note.setBorderColor(BORDER);
-        note.setPadding(8f);
-        note.setBackgroundColor(PRIMARY_LIGHT);
-        note.addElement(new Paragraph("Declaration", fB(9, PRIMARY)));
-        Paragraph p = new Paragraph(
-                "We declare that this invoice shows the actual details of the goods supplied.",
-                fN(8, TEXT_SEC)
+        Paragraph paragraph = new Paragraph(
+                "Amount in Words: " + words + " Rupees Only",
+                fB(8, TEXT)
         );
-        p.setLeading(11f);
-        p.setSpacingBefore(4f);
-        note.addElement(p);
-        t.addCell(note);
+        paragraph.setSpacingBefore(4f);
+        paragraph.setSpacingAfter(12f);
 
-        PdfPCell sig = new PdfPCell();
-        sig.setBorderColor(BORDER);
-        sig.setPadding(8f);
-        sig.setMinimumHeight(62f);
-
-        Paragraph sf = new Paragraph("For " + MANUAL_COMPANY_NAME, fB(9, TEXT));
-        sf.setAlignment(Element.ALIGN_RIGHT);
-        sig.addElement(sf);
-
-        sig.addElement(new Paragraph("\n\n", fN(8, TEXT)));
-
-        Paragraph as = new Paragraph("Authorized Signatory", fN(8, TEXT_SEC));
-        as.setAlignment(Element.ALIGN_RIGHT);
-        sig.addElement(as);
-
-        t.addCell(sig);
-        doc.add(t);
+        doc.add(paragraph);
     }
 
     // ==================== TERMS + FOOTER ====================
     private static void addTermsAndFooter(Document doc, InvoiceData d) throws DocumentException {
         if (hasText(d.termsAndConditions)) {
-            Paragraph th = new Paragraph("Terms & Conditions:", fB(8, TEXT));
-            th.setSpacingBefore(2f);
-            doc.add(th);
+            Paragraph heading = new Paragraph("Terms & Conditions:", fB(8, TEXT));
+            heading.setSpacingBefore(2f);
+            doc.add(heading);
 
-            Paragraph tc = new Paragraph(d.termsAndConditions, fN(7, TEXT_SEC));
-            tc.setSpacingAfter(4f);
-            doc.add(tc);
+            Paragraph terms = new Paragraph(d.termsAndConditions, fN(7, TEXT_SEC));
+            terms.setSpacingAfter(6f);
+            doc.add(terms);
         }
 
-        Paragraph thanks = new Paragraph("Thank you", fB(8, PRIMARY));
-        thanks.setAlignment(Element.ALIGN_CENTER);
-        thanks.setSpacingBefore(4f);
-        doc.add(thanks);
+        Paragraph footer = new Paragraph(
+                hasText(d.footerNote) ? d.footerNote : "Thank you",
+                fB(8, PRIMARY)
+        );
+        footer.setAlignment(Element.ALIGN_CENTER);
+        footer.setSpacingBefore(8f);
+        doc.add(footer);
 
-        Paragraph sys = new Paragraph(
+        Paragraph systemNote = new Paragraph(
                 "This is a computer-generated invoice and does not require a physical signature.",
                 fN(7, TEXT_SEC)
         );
-        sys.setAlignment(Element.ALIGN_CENTER);
-        sys.setSpacingBefore(2f);
-        doc.add(sys);
+        systemNote.setAlignment(Element.ALIGN_CENTER);
+        systemNote.setSpacingBefore(2f);
+        doc.add(systemNote);
     }
 
     // ==================== HELPERS ====================
     private static PdfPCell card(Color bg) {
-        PdfPCell c = new PdfPCell();
-        c.setBorderColor(BORDER);
-        c.setPadding(6f);
-        c.setBackgroundColor(bg);
-        return c;
-    }
-
-    private static Paragraph sectionTitle(String value) {
-        Paragraph p = new Paragraph(value, fB(10, PRIMARY));
-        p.setSpacingAfter(4f);
-        return p;
+        PdfPCell cell = new PdfPCell();
+        cell.setBorderColor(BORDER);
+        cell.setPadding(6f);
+        cell.setBackgroundColor(bg);
+        return cell;
     }
 
     private static void addCardRow(PdfPCell card, String label, String value) {
-        PdfPTable r = new PdfPTable(2);
-        r.setWidthPercentage(100);
+        PdfPTable row = new PdfPTable(2);
+        row.setWidthPercentage(100);
 
         try {
-            r.setWidths(new float[]{1f, 1.6f});
+            row.setWidths(new float[]{1f, 1.6f});
         } catch (Exception ignored) {
         }
 
-        PdfPCell lc = new PdfPCell(new Phrase(label, fB(7, TEXT_SEC)));
-        lc.setBorder(Rectangle.NO_BORDER);
-        lc.setPadding(1.5f);
+        PdfPCell labelCell = new PdfPCell(new Phrase(label, fB(7, TEXT_SEC)));
+        labelCell.setBorder(Rectangle.NO_BORDER);
+        labelCell.setPadding(1.5f);
 
-        PdfPCell vc = new PdfPCell(new Phrase(safe(value), fN(7, TEXT)));
-        vc.setBorder(Rectangle.NO_BORDER);
-        vc.setPadding(1.5f);
+        PdfPCell valueCell = new PdfPCell(new Phrase(safe(value), fN(7, TEXT)));
+        valueCell.setBorder(Rectangle.NO_BORDER);
+        valueCell.setPadding(1.5f);
 
-        r.addCell(lc);
-        r.addCell(vc);
-        card.addElement(r);
+        row.addCell(labelCell);
+        row.addCell(valueCell);
+
+        card.addElement(row);
     }
 
     private static void addRightLine(PdfPCell cell, String text, Font font) {
@@ -515,35 +491,34 @@ public final class InvoicePdfGenerator {
             return;
         }
 
-        Paragraph p = new Paragraph(text, font);
-        p.setAlignment(Element.ALIGN_RIGHT);
-        p.setLeading(10f);
-        cell.addElement(p);
+        Paragraph paragraph = new Paragraph(text, font);
+        paragraph.setAlignment(Element.ALIGN_RIGHT);
+        cell.addElement(paragraph);
     }
 
     private static void addCell(PdfPTable table, String text, Font font, int align, Color bg) {
-        PdfPCell c = new PdfPCell(new Phrase(safe(text), font));
-        c.setPadding(3f);
-        c.setBorderColor(LIGHT_BORDER);
-        c.setHorizontalAlignment(align);
-        c.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        c.setBackgroundColor(bg);
-        table.addCell(c);
+        PdfPCell cell = new PdfPCell(new Phrase(safe(text), font));
+        cell.setPadding(3f);
+        cell.setBorderColor(new Color(224, 224, 224));
+        cell.setHorizontalAlignment(align);
+        cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cell.setBackgroundColor(bg);
+        table.addCell(cell);
     }
 
     private static void addTotalRow(PdfPTable table, String label, String value) {
-        PdfPCell lc = new PdfPCell(new Phrase(label, fN(8, TEXT)));
-        lc.setPadding(4f);
-        lc.setBorder(Rectangle.NO_BORDER);
-        lc.setBackgroundColor(Color.WHITE);
-        table.addCell(lc);
+        PdfPCell labelCell = new PdfPCell(new Phrase(label, fN(8, TEXT)));
+        labelCell.setPadding(4f);
+        labelCell.setBorder(Rectangle.NO_BORDER);
+        labelCell.setBackgroundColor(Color.WHITE);
+        table.addCell(labelCell);
 
-        PdfPCell vc = new PdfPCell(new Phrase(value, fN(8, TEXT)));
-        vc.setPadding(4f);
-        vc.setBorder(Rectangle.NO_BORDER);
-        vc.setBackgroundColor(Color.WHITE);
-        vc.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        table.addCell(vc);
+        PdfPCell valueCell = new PdfPCell(new Phrase(value, fN(8, TEXT)));
+        valueCell.setPadding(4f);
+        valueCell.setBorder(Rectangle.NO_BORDER);
+        valueCell.setBackgroundColor(Color.WHITE);
+        valueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        table.addCell(valueCell);
     }
 
     private static String stateText(String state, String stateCode) {
@@ -565,30 +540,30 @@ public final class InvoicePdfGenerator {
         return "-";
     }
 
-    static String safe(String v) {
-        return v == null || v.isBlank() ? "-" : v.trim();
+    static String safe(String value) {
+        return value == null || value.isBlank() ? "-" : value.trim();
     }
 
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
     }
 
-    static String money(BigDecimal v) {
-        return v == null
+    static String money(BigDecimal value) {
+        return value == null
                 ? "Rs. 0.00"
-                : "Rs. " + v.setScale(2, RoundingMode.HALF_UP).toPlainString();
+                : "Rs. " + value.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
-    private static String pct(BigDecimal v) {
-        return v == null ? "0%" : v.stripTrailingZeros().toPlainString() + "%";
+    private static String pct(BigDecimal value) {
+        return value == null ? "0%" : value.stripTrailingZeros().toPlainString() + "%";
     }
 
-    static String fmtDt(LocalDateTime dt) {
-        return dt == null ? "-" : dt.format(DATE_FMT);
+    static String fmtDt(LocalDateTime dateTime) {
+        return dateTime == null ? "-" : dateTime.format(DATE_FMT);
     }
 
-    static String fmtDateTime(LocalDateTime dt) {
-        return dt == null ? "-" : dt.format(DATETIME_FMT);
+    static String fmtDateTime(LocalDateTime dateTime) {
+        return dateTime == null ? "-" : dateTime.format(DATETIME_FMT);
     }
 
     private static String arrayValue(String[] arr, int index) {
