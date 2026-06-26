@@ -16,35 +16,86 @@ import java.util.List;
 @AllArgsConstructor
 public class DashboardResponse {
 
-    // --- Financial ---
+    // ==========================
+    // Financial Summary
+    // ==========================
     private BigDecimal totalSales;
     private BigDecimal totalPurchases;
     private BigDecimal profit;
 
-    // --- Inventory ---
+    // ==========================
+    // Today's Business
+    // ==========================
+    @Builder.Default
+    private BigDecimal todaySales = BigDecimal.ZERO;
+
+    @Builder.Default
+    private BigDecimal todayCollections = BigDecimal.ZERO;
+
+    @Builder.Default
+    private BigDecimal todaySupplierPayments = BigDecimal.ZERO;
+
+    @Builder.Default
+    private BigDecimal todayExpenses = BigDecimal.ZERO;
+
+    @Builder.Default
+    private BigDecimal todayCashInflow = BigDecimal.ZERO;
+
+    @Builder.Default
+    private BigDecimal todayCashOutflow = BigDecimal.ZERO;
+
+    @Builder.Default
+    private BigDecimal todayNetCash = BigDecimal.ZERO;
+
+    // ==========================
+    // Outstanding Balances
+    // ==========================
+    @Builder.Default
+    private BigDecimal outstandingReceivables = BigDecimal.ZERO;
+
+    @Builder.Default
+    private BigDecimal outstandingPayables = BigDecimal.ZERO;
+
+    @Builder.Default
+    private BigDecimal cashBalance = BigDecimal.ZERO;
+
+    // ==========================
+    // Inventory
+    // ==========================
     private long totalMedicines;
     private long lowStockCount;
     private long outOfStockCount;
 
-    // --- Expiry ---
+    // ==========================
+    // Expiry
+    // ==========================
     private long nearExpiryCount;
     private long expiredCount;
 
-    // --- Payments ---
+    // ==========================
+    // Existing Pending Values
+    // ==========================
     private BigDecimal pendingReceivables;
     private BigDecimal pendingPayables;
 
-    // --- Filter meta ---
+    // ==========================
+    // Filter
+    // ==========================
     private String appliedPreset;
     private LocalDate startDate;
     private LocalDate endDate;
     private String rangeLabel;
 
-    // --- Analytics ---
+    // ==========================
+    // Charts
+    // ==========================
     private List<TrendPoint> trendData;
+
     private List<TopSellingItem> topSellingMedicines;
 
-    // --- Recent ERP Activity ---
+    // ==========================
+    // Recent Activity
+    // ==========================
     private List<ActivityItem> recentActivities;
 
     @Data
@@ -52,11 +103,17 @@ public class DashboardResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ActivityItem {
+
         private String type;
+
         private String title;
+
         private String subtitle;
+
         private LocalDateTime activityTime;
+
         private String status;
+
         private BigDecimal amount;
     }
 
@@ -65,10 +122,15 @@ public class DashboardResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class TrendPoint {
+
         private String label;
+
         private LocalDate bucketDate;
+
         private BigDecimal sales;
+
         private BigDecimal purchases;
+
         private BigDecimal profit;
     }
 
@@ -77,9 +139,13 @@ public class DashboardResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class TopSellingItem {
+
         private String medicineId;
+
         private String medicineName;
+
         private long quantitySold;
+
         private BigDecimal revenue;
     }
 }
